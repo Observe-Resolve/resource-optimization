@@ -318,7 +318,7 @@ workflow:
           \ }\n| dedup containername, k8s.workload.name\n| filter not contains(containername,\"\
           \ \")\n| filter isNotNull(cpuratio) AND isNotNull(memratio) AND isNotNull(usage_cpu)\
           \ AND isNotNull( usage_memory) AND isNotNull(request_cpu) AND isNotNull(request_memory)\n\
-          | filter (memratio < 60 or memratio> 110) or ( cpuratio < 30 or cpuratio\
+          | filter (memratio < 70 or memratio> 110) or ( cpuratio < 70 or cpuratio\
           \ > 110)\n| fieldsAdd cpurecommended= usage_cpu * 1.30 , memoryrecommened\
           \ = usage_memory * 1.30\n| fields workloadid= id, containername, k8sobject,workloadname=k8s.workload.name,podname,\
           \ clustername=k8s.cluster.name, owner, memratio, cpuratio, memoryrecommened,\
