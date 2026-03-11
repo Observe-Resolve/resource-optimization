@@ -1,14 +1,10 @@
-apiVersion: apps/v1
-kind: Deployment
 metadata:
   name: shippingservice
   namespace: hipster-shop
-  annotations:
-    dt.owner: "hipster-shop"
-    resource-optimization.dynatrace.com/enabled: "true"
-    resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
-    resource-optimization.dynatrace.com/github-path: "hipster-shop/shippingservice.yaml"
-    resource-optimization.dynatrace.com/github-branch: "master"
+  uid: "137172b4-c129-48b9-b7e3-619b74cf15e6"
+  resourceVersion: "174572"
+  generation: 3
+  creationTimestamp: "2026-03-10T17:21:41Z"
 spec:
   replicas: 1
   selector:
@@ -16,44 +12,82 @@ spec:
       app: shippingservice
   template:
     metadata:
+      creationTimestamp: null
       labels:
         app: shippingservice
       annotations:
-        dt.owner: "hipster-shop"
+        dt.owner: hipster-shop
         resource-optimization.dynatrace.com/enabled: "true"
-        resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
-        resource-optimization.dynatrace.com/github-path: "hipster-shop/shippingservice.yaml"
-        resource-optimization.dynatrace.com/github-branch: "master"
+        resource-optimization.dynatrace.com/github-branch: master
+        resource-optimization.dynatrace.com/github-path: hipster-shop/shippingservice.yaml
+        resource-optimization.dynatrace.com/github-repo: github.com/Observe-Resolve/resource-optimization
     spec:
-      terminationGracePeriodSeconds: 5
       containers:
-      - name: server
-        image: us-central1-docker.pkg.dev/google-samples/microservices-demo/shippingservice:v0.10.4
-        ports:
-        - containerPort: 50051
-          name: grpc
-        env:
-        - name: PORT
-          value: "50051"
-        - name: DISABLE_PROFILER
-          value: "1"
-        resources:
-          requests:
-            cpu: 200m
-            memory: 256Mi
-          limits:
-            cpu: 400m
-            memory: 512Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-        livenessProbe:
-          grpc:
-            port: 50051
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        readinessProbe:
-          grpc:
-            port: 50051
-          initialDelaySeconds: 5
-          periodSeconds: 10
+        - name: server
+          image: "us-central1-docker.pkg.dev/google-samples/microservices-demo/shippingservice:v0.10.4"
+          ports: - name: grpc
+              containerPort: 50051
+              protocol: TCP
+          env: - name: PORT
+              value: "50051"
+            - name: DISABLE_PROFILER
+              value: "1"
+          resources: limits:
+              cpu: "400m"
+              memory: "512Mi"
+            requests:
+              cpu: "431m"
+              memory: "10Mi"
+          livenessProbe: grpc:
+              port: 50051
+              service: ""
+            initialDelaySeconds: 5
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe: grpc:
+              port: 50051
+              service: ""
+            initialDelaySeconds: 5
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+          securityContext: readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 5
+      dnsPolicy: ClusterFirst
+      securityContext:
+{}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: "25%"
+      maxSurge: "25%"
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+status:
+  observedGeneration: 3
+  replicas: 1
+  updatedReplicas: 1
+  readyReplicas: 1
+  availableReplicas: 1
+  conditions:
+    - type: Progressing
+      status: True
+      lastUpdateTime: "2026-03-11T14:12:04Z"
+      lastTransitionTime: "2026-03-10T17:21:41Z"
+      reason: NewReplicaSetAvailable
+      message: "ReplicaSet \"shippingservice-64ccc9d7db\" has successfully progressed."
+    - type: Available
+      status: True
+      lastUpdateTime: "2026-03-11T14:16:49Z"
+      lastTransitionTime: "2026-03-11T14:16:49Z"
+      reason: MinimumReplicasAvailable
+      message: Deployment has minimum availability.
