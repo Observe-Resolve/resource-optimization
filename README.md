@@ -103,7 +103,7 @@ chmod 777 deployment.sh
 
 ## Notebook
 
-Let's deploy the notebook located : `dynatrace/dynatrace/Smartscape Resource allocation.json`
+Let's deploy the notebook located : `dynatrace/dynatrace/dynatrace/SmartscapeResourceallocation.json`
 
 In dynatrace , Open The Notebook application and click on upload
 <p align="center"><img src="/image/notebook.png" width="40%" alt="autoscaling notebook" /></p>
