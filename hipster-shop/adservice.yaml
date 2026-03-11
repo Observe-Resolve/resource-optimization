@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adservice
+  namespace: hipster-shop
+  annotations:
+    dt.owner: "hipster-shop"
+    resource-optimization.dynatrace.com/enabled: "true"
+    resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
+    resource-optimization.dynatrace.com/github-path: "hipster-shop/adservice.yaml"
+    resource-optimization.dynatrace.com/github-branch: "main"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adservice
+  template:
+    metadata:
+      labels:
+        app: adservice
+      annotations:
+        dt.owner: "hipster-shop"
+        resource-optimization.dynatrace.com/enabled: "true"
+        resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
+        resource-optimization.dynatrace.com/github-path: "hipster-shop/adservice.yaml"
+        resource-optimization.dynatrace.com/github-branch: "main"
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: us-central1-docker.pkg.dev/google-samples/microservices-demo/adservice:v0.10.4
+        ports:
+        - containerPort: 9555
+          name: grpc
+        env:
+        - name: PORT
+          value: "9555"
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+        livenessProbe:
+          grpc:
+            port: 9555
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          grpc:
+            port: 9555
+          initialDelaySeconds: 20
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: adservice
+  namespace: hipster-shop
+spec:
+  type: ClusterIP
+  selector:
+    app: adservice
+  ports:
+  - port: 9555
+    targetPort: 9555
+    protocol: TCP
+    name: grpc

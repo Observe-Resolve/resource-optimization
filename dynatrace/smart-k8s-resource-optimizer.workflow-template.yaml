@@ -1,0 +1,304 @@
+metadata:
+  version: '1'
+  dependencies:
+    apps:
+    - id: dynatrace.automations
+      version: ^1.2879.0
+    - id: dynatrace.github.connector
+      version: ^2.8.2-dev.20260311T124502+0ce2360d
+    - id: dynatrace.ownership
+      version: ^2.4.1-dev.20260311T072218+f6366e64
+    - id: dynatrace.slack
+      version: ^3.4.1-dev.20260311T073209+fde408a3
+  inputs:
+  - type: connection
+    schema: app:dynatrace.github.connector:connection
+    targets:
+    - tasks.create_pull_request_1.connectionId
+    - tasks.create_or_replace_file_1.connectionId
+  - type: connection
+    schema: app:dynatrace.slack:connection
+    targets:
+    - tasks.send_message_1.connection
+workflow:
+  title: Smart K8s Resource Optimizer
+  description: Queries Smartscape V2 for underutilized K8s workloads, adjusts CPU/memory
+    requests based on 7-day p95 usage, commits patched manifests to GitHub, and notifies
+    owners via Slack.
+  schemaVersion: 4
+  trigger: {}
+  result: null
+  type: STANDARD
+  input: {}
+  hourlyExecutionLimit: 1000
+  guide: null
+  tasks:
+    get_owners_1:
+      name: get_owners_1
+      input:
+        entityIds: '{{ _.item }}'
+      action: dynatrace.ownership:get-ownership-from-entity
+      active: false
+      position:
+        x: 0
+        y: 2
+      conditions:
+        custom: '{{ result("collect_underutilized_workloads").records | length > 0
+          }}'
+        states:
+          collect_underutilized_workloads: OK
+      withItems: item in {{ result("collect_underutilized_workloads").records }}
+      concurrency: 1
+      description: Retrieves owners from Entities and Team identifiers.
+      predecessors:
+      - collect_underutilized_workloads
+    send_message_1:
+      name: send_message_1
+      input:
+        channel: C04T39FCCQ1
+        message: '{{ _.item.message }}'
+        reaction: []
+        connection: ''
+        channelType: id
+        executionDate: '{{ execution().started_at }}'
+        appendToThread: false
+        replyBroadcast: false
+        selectedRequestType: 0
+        attachmentToggleValue: none
+      action: dynatrace.slack:slack-send-message
+      active: true
+      position:
+        x: 0
+        y: 6
+      conditions:
+        custom: '{{ result("create_or_replace_file_1").slackMessages | length >0 }}'
+        states:
+          create_pull_request_1: OK
+      withItems: item in {{ result("collect_underutilized_workloads").slackMessages
+        }}
+      concurrency: 1
+      description: Send a message to a Slack workspace
+      predecessors:
+      - create_pull_request_1
+    filter_and_adjust:
+      name: filter_and_adjust
+      input:
+        script: "import { execution } from '@dynatrace-sdk/automation-utils';\n\n\
+          type FileUpdate = {\n  owner: string\n  repoName: string\n  repo: string\n\
+          \  sourceBranch: string\n  destBranch: string\n  workloadname: string\n\
+          \  path: string\n  content: string\n  commit_message: string\n  pr_title:\
+          \ string\n  pr_body: string\n}\n\ntype PrepResult = {\n  updates: FileUpdate[]\n\
+          \  errors: string[]\n  total: number\n  slackMessages: { repo: string; message:\
+          \ string }[]\n}\n\nexport function extractRepoName(repo: string): string\
+          \ { \n  if (!repo) return repo;\n  \n  const trimmed = repo.trim();\n  const\
+          \ index = trimmed.lastIndexOf(\"/\"); \n  if (index === -1) {  \n    return\
+          \ trimmed;  \n  }\n  return trimmed.substring(index + 1);\n}\n\nfunction\
+          \ toYaml(obj: any, indent: number = 0): string {\n  const pad = '  '.repeat(indent);\n\
+          \n  if (obj === null || obj === undefined) return 'null\\n';\n  if (typeof\
+          \ obj === 'boolean') return `${obj}\\n`;\n  if (typeof obj === 'number')\
+          \ return `${obj}\\n`;\n\n  if (typeof obj === 'string') {\n    if (obj ===\
+          \ '' || obj === 'true' || obj === 'false' || obj === 'null' ||\n       \
+          \ obj.match(/[:{}\\[\\],&*?|>!%@`#'\"\\n]/) || obj.match(/^\\d/)) {\n  \
+          \    return `\"${obj.replace(/\\\\/g, '\\\\\\\\').replace(/\"/g, '\\\\\"\
+          ')}\"\\n`;\n    }\n    return `${obj}\\n`;\n  }\n\n  if (Array.isArray(obj))\
+          \ {\n    if (obj.length === 0) return '[]\\n';\n    let out = '';\n    for\
+          \ (const item of obj) {\n      if (typeof item === 'object' && item !==\
+          \ null && !Array.isArray(item)) {\n        const keys = Object.keys(item);\n\
+          \        if (keys.length === 0) {\n          out += `${pad}- {}\\n`;\n \
+          \       } else {\n          out += `${pad}- ${keys[0]}: ${toYaml(item[keys[0]],\
+          \ indent + 2).trimStart()}`;\n          for (let i = 1; i < keys.length;\
+          \ i++) {\n            out += `${pad}  ${keys[i]}: ${toYaml(item[keys[i]],\
+          \ indent + 2).trimStart()}`;\n          }\n        }\n      } else {\n \
+          \       out += `${pad}- ${toYaml(item, indent + 1).trimStart()}`;\n    \
+          \  }\n    }\n    return out;\n  }\n\n  const keys = Object.keys(obj);\n\
+          \  if (keys.length === 0) return '{}\\n';\n\n  let out = '';\n  for (const\
+          \ key of keys) {\n    const val = obj[key];\n    if (typeof val === 'object'\
+          \ && val !== null) {\n      out += `${pad}${key}:\\n${toYaml(val, indent\
+          \ + 1)}`;\n    } else {\n      out += `${pad}${key}: ${toYaml(val, indent\
+          \ + 1).trimStart()}`;\n    }\n  }\n  return out;\n}\n\nexport default async\
+          \ function ({ execution_id }) {\n  const ex = await execution(execution_id);\n\
+          \  console.log('Preparing file update payloads...');\n\n  const dqlResult\
+          \ = await ex.result('collect_underutilized_workloads');\n  const records\
+          \ = dqlResult?.records || [];\n\n  if (records.length === 0) {\n    return\
+          \ { updates: [], errors: ['No records from DQL query'], total: 0, slackMessages:\
+          \ [] } as PrepResult;\n  }\n\n  const updates: FileUpdate[] = [];\n  const\
+          \ errors: string[] = [];\n  const timestamp = Date.now();\n\n  // PR body\
+          \ template\n  let prBody = `## Kubernetes Resource Optimization\\n\\n`;\n\
+          \  prBody += `**Generated:** ${new Date().toISOString()}\\n`;\n  prBody\
+          \ += `**Source:** Dynatrace Smart Resource Optimizer\\n\\n`;\n  prBody +=\
+          \ `### Resource Changes\\n\\n`;\n  prBody += `| Workload | Container | CPU\
+          \ Request | Memory Request | CPU Util | Mem Util |\\n`;\n  prBody += `|----------|-----------|-------------|----------------|----------|----------|\\\
+          n`;\n\n  const optimizable: any[] = [];\n\n  for (const r of records) {\n\
+          \    if (r.optimization !== \"true\") continue;\n    if (!r.k8sobject) continue;\n\
+          \n    let github_repo = r.github_repo;\n    let github_path = r.github_path;\n\
+          \    let github_branch = r.github_branch;\n\n    try {\n      const k8sObj\
+          \ = JSON.parse(r.k8sobject);\n      const annotations = k8sObj?.spec?.template?.metadata?.annotations\
+          \ || {};\n\n      if (!github_repo || github_repo === \"NA\") {\n      \
+          \  github_repo = annotations['resource-optimization.dynatrace.com/github-repo']\
+          \ || \"NA\";\n      }\n      if (!github_path || github_path === \"NA\"\
+          ) {\n        github_path = annotations['resource-optimization.dynatrace.com/github-path']\
+          \ || \"NA\";\n      }\n      if (!github_branch || github_branch === \"\
+          NA\") {\n        github_branch = annotations['resource-optimization.dynatrace.com/github-branch']\
+          \ || \"main\";\n      }\n    } catch (_) { continue; }\n\n    if (!github_repo\
+          \ || github_repo === \"NA\") continue;\n    if (!github_path || github_path\
+          \ === \"NA\") continue;\n\n    optimizable.push({ ...r, github_repo, github_path,\
+          \ github_branch });\n\n    const containers = r.containers || [];\n    for\
+          \ (const c of containers) {\n      const cpuUtil = c.cpuratio != null ?\
+          \ `${(c.cpuratio * 100).toFixed(1)}%` : 'N/A';\n      const memUtil = c.memratio\
+          \ != null ? `${(c.memratio * 100).toFixed(1)}%` : 'N/A';\n      prBody +=\
+          \ `| ${r.workloadname} | ${c.containername} | ${c.cpurecommended || 'N/A'}\
+          \ | ${c.memoryrecommened || 'N/A'} | ${cpuUtil} | ${memUtil} |\\n`;\n  \
+          \  }\n  }\n\n  prBody += `\\n### Method\\n\\n`;\n  prBody += `- **Observation\
+          \ window:** 7 days (p95)\\n`;\n  prBody += `- **Buffer:** 30% headroom\\\
+          n`;\n  prBody += `- **Limits:** 2× request values\\n`;\n  prBody += `---\\\
+          n`;\n  prBody += `*Automated by Dynatrace Smart Optimizer*\\n`;\n\n  //\
+          \ Track PR counts *inline* during update generation\n  const prCounter:\
+          \ Record<string, number> = {};\n\n  for (const w of optimizable) {\n   \
+          \ try {\n      const parts = w.github_repo.replace(/^https?:\\/\\//, '').split('/');\n\
+          \      if (parts.length < 3) {\n        errors.push(`Cannot parse repo:\
+          \ ${w.github_repo}`);\n        continue;\n      }\n\n      const owner =\
+          \ parts[1];\n      const repoName = parts[2];\n      const destBranch =\
+          \ w.github_branch || \"main\";\n\n      const k8sObj = JSON.parse(w.k8sobject);\n\
+          \      const yamlContent = toYaml(k8sObj);\n\n      updates.push({\n   \
+          \     owner,\n        repoName,\n        repo: `${owner}/${repoName}`,\n\
+          \        sourceBranch: `resource-optimization/${w.workloadname}-${timestamp}`,\n\
+          \        destBranch,\n        workloadname: w.workloadname,\n        path:\
+          \ w.github_path,\n        content: yamlContent,\n        commit_message:\
+          \ `chore: optimize resource requests for ${w.workloadname}`,\n        pr_title:\
+          \ `chore: optimize resource requests for ${w.workloadname}`,\n        pr_body:\
+          \ prBody\n      });\n\n      // Inline increment\n      if (!prCounter[repoName])\
+          \ prCounter[repoName] = 0;\n      prCounter[repoName]++;\n\n      console.log(`✓\
+          \ ${w.workloadname} → ${owner}/${repoName}:${w.github_path}`);\n\n    }\
+          \ catch (e: any) {\n      errors.push(`${w.workloadname}: ${e.message}`);\n\
+          \    }\n  }\n\n  console.log(`Done: ${updates.length} file updates prepared,\
+          \ ${errors.length} errors`);\n\n  //\n  // Build Slack message objects (one\
+          \ per repo)\n  //\n  const slackMessages = Object.keys(prCounter).map(repo\
+          \ => ({\n    repo,\n    message:\n      `Hi! After scanning recent Kubernetes\
+          \ resource utilization, we generated **${prCounter[repo]} PR${prCounter[repo]\
+          \ > 1 ? 's' : ''}** ` +\n      `for the repository *${repo}*.\\n\\n` +\n\
+          \      `\U0001F517 GitHub repo: https://github.com/${updates.find(u => u.repoName\
+          \ === repo)?.owner}/${repo}`\n  }));\n\n  return {\n    updates,\n    errors,\n\
+          \    total: updates.length,\n    slackMessages\n  } as PrepResult;\n}"
+      action: dynatrace.automations:run-javascript
+      position:
+        x: 0
+        y: 3
+      conditions:
+        custom: '{{ result("collect_underutilized_workloads").records | length >0
+          }}'
+        states:
+          get_owners_1: OK
+      description: 'Filter optimizable workloads, adjust CPU/memory in k8sobject,
+        convert to YAML, create feature branch, prepare file list for GitHub actions.
+
+        '
+      predecessors:
+      - get_owners_1
+    create_pull_request_1:
+      name: create_pull_request_1
+      input:
+        owner: '{{ _.item.owner }}'
+        title: '{{ _.item.pr_title }}'
+        repository: '{{ _.item.repoName }}'
+        description: '{{ _.item.pr_body }}'
+        connectionId: ''
+        sourceBranch: '{{ _.item.sourceBranch }}'
+        targetBranch: '{{ _.item.destBranch }}'
+      action: dynatrace.github.connector:create-pull-request
+      active: true
+      position:
+        x: 0
+        y: 5
+      conditions:
+        states:
+          create_or_replace_file_1: OK
+      withItems: item in {{ result("filter_and_adjust").updates }}
+      concurrency: 1
+      description: Creates a pull request
+      predecessors:
+      - create_or_replace_file_1
+    create_or_replace_file_1:
+      name: create_or_replace_file_1
+      input:
+        owner: '{{ _.item.owner }}'
+        branch: '{{ _.item.sourceBranch }}'
+        filePath: '{{ _.item.path }}'
+        repository: '{{ _.item.repoName }}'
+        fileContent: '{{ _.item.content }}'
+        connectionId: ''
+        sourceBranch: '{{ _.item.destBranch }}'
+        commitMessage: '{{ _.item.commit_message }}'
+        createNewBranch: true
+      action: dynatrace.github.connector:create-or-replace-file
+      active: true
+      position:
+        x: 0
+        y: 4
+      conditions:
+        custom: '{{ result("filter_and_adjust").updates | length >0  }}'
+        states:
+          filter_and_adjust: OK
+      withItems: item in {{ result("filter_and_adjust").updates }}
+      concurrency: 1
+      description: Creates or replaces a file
+      predecessors:
+      - filter_and_adjust
+    collect_underutilized_workloads:
+      name: collect_underutilized_workloads
+      input:
+        query: "smartscapeNodes CONTAINER\n| fieldsRename containername=name\n| traverse\
+          \ is_part_of, K8S_POD, fieldsKeep:{id,containername}\n| fieldsAdd podname=\
+          \ k8s.pod.name, podid=id\n| traverse is_part_of, K8S_DEPLOYMENT,fieldsKeep:{podname,\
+          \ podid}\n| fieldsAdd podname = dt.traverse.history[1][podname], podid =\
+          \ dt.traverse.history[1][podid], containername=dt.traverse.history[0][containername],containerid=dt.traverse.history[0][id]\n\
+          | fieldsAdd Appnamespace = in(k8s.namespace.name, \"dynatrace\",\"kube-system\"\
+          ,\"falco\",\"kyverno\",\"gmp-system\",\"cert-manager\",\"kuma-system\",\"\
+          opentelemetry-operator-system\")\n| filter not Appnamespace\n| fieldsAdd\
+          \ optimization= if(isNotNull( `tags:k8s.annotations`[`resource-optimization.dynatrace.com/enabled`]),\
+          \ `tags:k8s.annotations`[`resource-optimization.dynatrace.com/enabled`],else:\
+          \ \"false\")\n| fieldsAdd owner= if(isNotNull( `tags:k8s.labels`[dt.owner]),\
+          \ `tags:k8s.labels`[dt.owner],else: \"NA\")\n| fieldsAdd github_repo= if(isNotNull(\
+          \ `tags:k8s.annotations`[`resource-optimization.dynatrace.com/github-repo`]),\
+          \ `tags:k8s.annotations`[`resource-optimization.dynatrace.com/github-repo`],else:\
+          \ \"NA\")\n| fieldsAdd github_path= if(isNotNull( `tags:k8s.annotations`[`resource-optimization.dynatrace.com/github-path`]),\
+          \ `tags:k8s.annotations`[`resource-optimization.dynatrace.com/github-path`],else:\
+          \ \"NA\")\n| fieldsAdd github_branch= if(isNotNull( `tags:k8s.annotations`[`resource-optimization.dynatrace.com/github-branch`]),\
+          \ `tags:k8s.annotations`[`resource-optimization.dynatrace.com/github-branch`],else:\
+          \ \"NA\")\n| fieldsAdd k8sobject= k8s.object\n| filter optimization == \"\
+          true\"\n| filter github_repo != \"NA\" AND github_path != \"NA\" AND github_path!=\
+          \ \"NA\"\n| lookup [\n    timeseries memusagevalues = max(dt.kubernetes.container.memory_working_set\
+          \ ),memrequest_value=sum(dt.kubernetes.container.requests_memory ),cpusagevalues\
+          \ = max(dt.kubernetes.container.cpu_usage ),cpurequest_value=sum(dt.kubernetes.container.requests_cpu\
+          \ ) , by:{dt.smartscape.container}, from: -7d\n    | fieldsAdd request_memory\
+          \ = arrayPercentile(memrequest_value,95)\n    | fieldsAdd usage_memory =\
+          \ arrayPercentile(memusagevalues,95)\n    | fieldsAdd request_cpu = arrayPercentile(cpurequest_value,95)\n\
+          \    | fieldsAdd usage_cpu= arrayPercentile(cpusagevalues,95)\n    | fieldsAdd\
+          \ memratio = (usage_memory/request_memory) * 100\n    | fieldsAdd cpuratio\
+          \ = (usage_cpu/request_cpu) * 100\n  ], sourceField:containerid, lookupField:dt.smartscape.container,\
+          \ fields:{ memratio,usage_memory,request_memory,cpuratio,request_cpu,usage_cpu\
+          \ }\n| filter isNotNull(cpuratio) AND isNotNull(memratio) AND isNotNull(usage_cpu)\
+          \ AND isNotNull( usage_memory) AND isNotNull(request_cpu) AND isNotNull(request_memory)\n\
+          | filter (memratio < 60 or memratio> 110) or ( cpuratio < 30 or cpuratio\
+          \ > 110)\n| fieldsAdd cpurecommended= usage_cpu * 1.30 , memoryrecommened\
+          \ = usage_memory * 1.30\n| fields workloadid= id, containername, k8sobject,workloadname=k8s.workload.name,podname,\
+          \ clustername=k8s.cluster.name, owner, memratio, cpuratio, memoryrecommened,\
+          \ cpurecommended, usage_memory,request_memory,optimization, github_repo,\
+          \ github_path, github_branch , request_cpu\n| fieldsAdd memsaving= request_memory\
+          \ - memoryrecommened , cpusaving= request_cpu - cpurecommended\n| summarize\n\
+          \    k8sobject = takeFirst(k8sobject),\n    github_repo = takeFirst(github_repo),\n\
+          \    github_path = takeFirst(github_path),\n    github_branch = takeFirst(github_branch),\n\
+          \    owner = takeFirst(owner),\n    optimization = takeFirst(optimization),\n\
+          \    clustername = takeFirst(clustername),\n    containers = collectArray(\n\
+          \      record(\n        containername,\n        cpurecommended,\n      \
+          \  memoryrecommened,\n        request_cpu,\n        request_memory,\n  \
+          \      cpuratio,\n        memratio,\n        cpusaving,\n        memsaving\n\
+          \      )\n    ),\n    by: { workloadname,workloadid }\n"
+      action: dynatrace.automations:execute-dql-query
+      position:
+        x: 0
+        y: 1
+      description: 'Query Smartscape V2 for container resources with p95 usage over
+        7 days. Groups results by workloadname with a containers array.
+
+        '
+      predecessors: []

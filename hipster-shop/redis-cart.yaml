@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cart
+  namespace: hipster-shop
+  annotations:
+    dt.owner: "hipster-shop"
+    resource-optimization.dynatrace.com/enabled: "true"
+    resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
+    resource-optimization.dynatrace.com/github-path: "hipster-shop/redis-cart.yaml"
+    resource-optimization.dynatrace.com/github-branch: "main"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-cart
+  template:
+    metadata:
+      labels:
+        app: redis-cart
+      annotations:
+        dt.owner: "hipster-shop"
+        resource-optimization.dynatrace.com/enabled: "true"
+        resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
+        resource-optimization.dynatrace.com/github-path: "hipster-shop/redis-cart.yaml"
+        resource-optimization.dynatrace.com/github-branch: "main"
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: redis
+        image: redis:alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 400m
+            memory: 512Mi
+        livenessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: redis-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cart
+  namespace: hipster-shop
+spec:
+  type: ClusterIP
+  selector:
+    app: redis-cart
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
