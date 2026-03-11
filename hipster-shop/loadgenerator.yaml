@@ -8,7 +8,7 @@ metadata:
     resource-optimization.dynatrace.com/enabled: "true"
     resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
     resource-optimization.dynatrace.com/github-path: "hipster-shop/loadgenerator.yaml"
-    resource-optimization.dynatrace.com/github-branch: "main"
+    resource-optimization.dynatrace.com/github-branch: "master"
 spec:
   replicas: 1
   selector:
@@ -23,7 +23,7 @@ spec:
         resource-optimization.dynatrace.com/enabled: "true"
         resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
         resource-optimization.dynatrace.com/github-path: "hipster-shop/loadgenerator.yaml"
-        resource-optimization.dynatrace.com/github-branch: "main"
+        resource-optimization.dynatrace.com/github-branch: "master"
     spec:
       terminationGracePeriodSeconds: 5
       initContainers:

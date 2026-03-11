@@ -8,7 +8,7 @@ metadata:
     resource-optimization.dynatrace.com/enabled: "true"
     resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
     resource-optimization.dynatrace.com/github-path: "hipster-shop/recommendationservice.yaml"
-    resource-optimization.dynatrace.com/github-branch: "main"
+    resource-optimization.dynatrace.com/github-branch: "master"
 spec:
   replicas: 1
   selector:
@@ -23,7 +23,7 @@ spec:
         resource-optimization.dynatrace.com/enabled: "true"
         resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
         resource-optimization.dynatrace.com/github-path: "hipster-shop/recommendationservice.yaml"
-        resource-optimization.dynatrace.com/github-branch: "main"
+        resource-optimization.dynatrace.com/github-branch: "master"
     spec:
       terminationGracePeriodSeconds: 5
       containers:
@@ -59,18 +59,3 @@ spec:
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: recommendationservice
-  namespace: hipster-shop
-spec:
-  type: ClusterIP
-  selector:
-    app: recommendationservice
-  ports:
-  - port: 8080
-    targetPort: 8080
-    protocol: TCP
-    name: grpc
