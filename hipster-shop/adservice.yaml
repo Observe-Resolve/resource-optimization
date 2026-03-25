@@ -1,14 +1,12 @@
-apiVersion: apps/v1
 kind: Deployment
+apiVersion: apps/v1
 metadata:
   name: adservice
   namespace: hipster-shop
-  annotations:
-    dt.owner: "hipster-shop"
-    resource-optimization.dynatrace.com/enabled: "true"
-    resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
-    resource-optimization.dynatrace.com/github-path: "hipster-shop/adservice.yaml"
-    resource-optimization.dynatrace.com/github-branch: "master"
+  uid: "9c3682ce-0542-408d-9e93-33eb07b9e296"
+  resourceVersion: "174578"
+  generation: 3
+  creationTimestamp: "2026-03-10T17:21:36Z"
 spec:
   replicas: 1
   selector:
@@ -16,41 +14,79 @@ spec:
       app: adservice
   template:
     metadata:
+      creationTimestamp: null
       labels:
         app: adservice
       annotations:
-        dt.owner: "hipster-shop"
+        dt.owner: hipster-shop
         resource-optimization.dynatrace.com/enabled: "true"
-        resource-optimization.dynatrace.com/github-repo: "github.com/Observe-Resolve/resource-optimization"
-        resource-optimization.dynatrace.com/github-path: "hipster-shop/adservice.yaml"
-        resource-optimization.dynatrace.com/github-branch: "master"
+        resource-optimization.dynatrace.com/github-branch: master
+        resource-optimization.dynatrace.com/github-path: hipster-shop/adservice.yaml
+        resource-optimization.dynatrace.com/github-repo: github.com/Observe-Resolve/resource-optimization
     spec:
-      terminationGracePeriodSeconds: 5
       containers:
-      - name: server
-        image: us-central1-docker.pkg.dev/google-samples/microservices-demo/adservice:v0.10.4
-        ports:
-        - containerPort: 9555
-          name: grpc
-        env:
-        - name: PORT
-          value: "9555"
-        resources:
-          requests:
-            cpu: 500m
-            memory: 1Gi
-          limits:
-            cpu: 1000m
-            memory: 2Gi
-        securityContext:
-          allowPrivilegeEscalation: false
-        livenessProbe:
-          grpc:
-            port: 9555
-          initialDelaySeconds: 20
-          periodSeconds: 10
-        readinessProbe:
-          grpc:
-            port: 9555
-          initialDelaySeconds: 20
-          periodSeconds: 10
+        - name: server
+          image: "us-central1-docker.pkg.dev/google-samples/microservices-demo/adservice:v0.10.4"
+          ports: - name: grpc
+              containerPort: 9555
+              protocol: TCP
+          env: - name: PORT
+              value: "9555"
+          resources: limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+          livenessProbe: grpc:
+              port: 9555
+              service: ""
+            initialDelaySeconds: 20
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe: grpc:
+              port: 9555
+              service: ""
+            initialDelaySeconds: 20
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+          securityContext: allowPrivilegeEscalation: false
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 5
+      dnsPolicy: ClusterFirst
+      securityContext:
+{}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: "25%"
+      maxSurge: "25%"
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+status:
+  observedGeneration: 3
+  replicas: 1
+  updatedReplicas: 1
+  readyReplicas: 1
+  availableReplicas: 1
+  conditions:
+    - type: Progressing
+      status: True
+      lastUpdateTime: "2026-03-11T14:12:06Z"
+      lastTransitionTime: "2026-03-10T17:21:36Z"
+      reason: NewReplicaSetAvailable
+      message: "ReplicaSet \"adservice-7f788dc488\" has successfully progressed."
+    - type: Available
+      status: True
+      lastUpdateTime: "2026-03-11T14:16:49Z"
+      lastTransitionTime: "2026-03-11T14:16:49Z"
+      reason: MinimumReplicasAvailable
+      message: Deployment has minimum availability.
